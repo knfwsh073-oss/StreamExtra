@@ -1689,17 +1689,40 @@ function cmpVer(a, b) {
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return d > 0 ? 1 : -1; }
   return 0;
 }
+// يجرّب عدة مصادر بالترتيب (GitHub مباشرة ثم مرايا بديلة) حتى لا يفشل الفحص إذا كان GitHub بطيئاً أو محجوباً
+const UPD_SOURCES = () => [
+  { name: 'GitHub', url: `https://raw.githubusercontent.com/${GH_REPO}/${GH_BRANCH}/app/package.json?t=${Date.now()}` },
+  { name: 'GitHub API', url: `https://api.github.com/repos/${GH_REPO}/contents/app/package.json?ref=${GH_BRANCH}`, headers: { Accept: 'application/vnd.github.raw' } },
+  { name: 'jsDelivr', url: `https://cdn.jsdelivr.net/gh/${GH_REPO}@${GH_BRANCH}/app/package.json` },
+  { name: 'jsDelivr-2', url: `https://fastly.jsdelivr.net/gh/${GH_REPO}@${GH_BRANCH}/app/package.json` }
+];
+async function fetchRemotePkg() {
+  let lastErr = 'offline';
+  for (const src of UPD_SOURCES()) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 7000);
+      try {
+        const r = await net.fetch(src.url, { signal: ctl.signal, headers: Object.assign({ 'Cache-Control': 'no-cache', 'User-Agent': 'StreamExtra-Updater' }, src.headers || {}) });
+        clearTimeout(to);
+        if (r.status === 404) { lastErr = 'notfound'; break; }                 // الملف غير موجود في هذا المصدر: جرّب المصدر التالي
+        if (!r.ok) { lastErr = 'http' + r.status; continue; }
+        const j = JSON.parse((await r.text()).replace(/^\uFEFF/, ''));
+        if (j && j.version) return { pkg: j, source: src.name };
+        lastErr = 'badjson'; break;
+      } catch (e) { clearTimeout(to); lastErr = (e && e.name === 'AbortError') ? 'timeout' : 'offline'; }
+    }
+  }
+  return { error: lastErr };
+}
 async function checkUpdate() {
-  const out = { current: APP_VERSION, currentDate: APP_DATE, latest: APP_VERSION, latestDate: APP_DATE, available: false, canUpdate: isSetupInstall(), checkedAt: Date.now() };
-  try {
-    const url = `https://raw.githubusercontent.com/${GH_REPO}/${GH_BRANCH}/app/package.json?t=${Date.now()}`;
-    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
-    const r = await net.fetch(url, { signal: ctl.signal, headers: { 'Cache-Control': 'no-cache' } });
-    clearTimeout(to);
-    if (!r.ok) return { ...out, error: 'HTTP ' + r.status };
-    const j = JSON.parse(await r.text());
-    if (j && j.version) { out.latest = String(j.version); out.latestDate = String(j.releaseDate || ''); out.available = cmpVer(out.latest, out.current) > 0; }
-  } catch (e) { out.error = e.message; }
+  const out = { current: APP_VERSION, currentDate: APP_DATE, latest: APP_VERSION, latestDate: APP_DATE, available: false, canUpdate: isSetupInstall(), checkedAt: Date.now(), notes: null, source: '' };
+  const r = await fetchRemotePkg();
+  if (r.error) { out.error = r.error; return out; }
+  const j = r.pkg;
+  out.source = r.source;
+  out.latest = String(j.version); out.latestDate = String(j.releaseDate || '');
+  out.notes = (j.notes && typeof j.notes === 'object') ? j.notes : null;
+  out.available = cmpVer(out.latest, out.current) > 0;
   return out;
 }
 ipcMain.handle('update:check', () => checkUpdate());

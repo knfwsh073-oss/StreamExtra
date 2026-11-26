@@ -49,8 +49,25 @@ try {
   $rel = Join-Path $root 'release'
   New-Item -ItemType Directory -Force -Path $rel | Out-Null
   $setupExe = Join-Path $rel 'StreamExtra-Setup.exe'
-  & $csc /nologo /target:winexe /optimize+ /codepage:65001 "/out:$setupExe" "/win32icon:app\assets\icon.ico" `
+
+  # backup copy of the app files, embedded INSIDE Setup.exe: if GitHub is blocked on the user's network,
+  # the first install still finishes (no VPN needed)
+  $embZip = Join-Path $rel 'app.zip'
+  Remove-Item $embZip -Force -ErrorAction SilentlyContinue
+  Add-Type -AssemblyName System.IO.Compression
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $zfs = [IO.File]::Open($embZip, [IO.FileMode]::Create)
+  $za  = New-Object IO.Compression.ZipArchive($zfs, [IO.Compression.ZipArchiveMode]::Create)
+  $appRoot = (Join-Path $root 'app').TrimEnd('\') + '\'
+  foreach ($f in Get-ChildItem (Join-Path $root 'app') -Recurse -File) {
+    $entry = 'app/' + $f.FullName.Substring($appRoot.Length).Replace('\', '/')
+    [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($za, $f.FullName, $entry, [IO.Compression.CompressionLevel]::Optimal)
+  }
+  $za.Dispose(); $zfs.Dispose()
+
+  & $csc /nologo /target:winexe /optimize+ /codepage:65001 "/out:$setupExe" "/win32icon:app\assets\icon.ico" "/resource:$embZip,app.zip" `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll setup\Setup.cs
+  Remove-Item $embZip -Force -ErrorAction SilentlyContinue
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path $setupExe)) { throw 'Setup build failed.' }
 
   # ---------- 3) GitHub_Upload folder ----------

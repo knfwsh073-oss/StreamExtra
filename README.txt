@@ -28,6 +28,10 @@ Repo used by Setup + updater:  b9storeb9-coder/StreamExtra  (main)
 In the app:  Settings -> Updates  shows your version, its date, the latest version + its release date,
 when it last checked, a "Check for updates" button and an "Update now" button.
 
+Download safety (v1.2): if GitHub is blocked/slow, Setup automatically tries a mirror (jsDelivr) and finally uses a copy of the app
+embedded INSIDE StreamExtra-Setup.exe, so the last step no longer fails with the "internet / VPN" message.
+The update check also tries several servers (GitHub, GitHub API, jsDelivr). Release notes: add them in app\package.json under "notes" (ar / en).
+
 Updates only replace the  app  folder (small). Electron/ffmpeg are downloaded once at install.
 Your Kick keys file (kick-app.json) and your settings in %AppData%\StreamExtra are kept.
 Note: GitHub's web upload adds/overwrites files but does not delete files you removed locally.

@@ -76,13 +76,15 @@ static class Strings
         Add("s_ffmpeg", "تحميل ffmpeg…", "Downloading ffmpeg…");
         Add("s_ytdlp", "تحميل yt-dlp (اختياري)…", "Downloading yt-dlp (optional)…");
         Add("s_app", "تحميل ملفات البرنامج من GitHub…", "Downloading the app files from GitHub…");
+        Add("s_mirror", "GitHub بطيء/محجوب — جاري استخدام خادم بديل…", "GitHub is slow/blocked - using a mirror server…");
+        Add("s_embedded", "استخدام ملفات البرنامج المرفقة داخل ملف التثبيت…", "Using the app files bundled inside the setup file…");
         Add("s_unpack", "فك الضغط…", "Extracting…");
         Add("s_finish", "إنهاء التثبيت…", "Finishing…");
         Add("s_done", "تم! جاري فتح البرنامج…", "Done! Opening the app…");
         Add("err", "حدث خطأ", "Something went wrong");
         Add("retry", "إعادة المحاولة", "Retry");
         Add("close", "إغلاق", "Close");
-        Add("noinet", "تعذّر التحميل. تأكد من الإنترنت (جرّب VPN إذا كان الموقع محجوباً) ثم أعد المحاولة.", "Download failed. Check your internet (try a VPN if the site is blocked) and retry.");
+        Add("noinet", "تعذّر التحميل بعد تجربة كل الخوادم. تأكد من اتصال الإنترنت ثم اضغط إعادة المحاولة (لا حاجة لـ VPN في الغالب).", "Download failed after trying every server. Check your connection and press Retry (a VPN is usually not needed).");
         Add("noffmpeg", "تعذّر الحصول على ffmpeg يدعم RTMPS.", "Could not get an ffmpeg build with RTMPS support.");
         Add("badzip", "ملف GitHub لا يحتوي مجلد app. تأكد أن المستودع يحتوي app\\main.js على الفرع main.", "The GitHub archive has no app folder. Make sure the repo has app\\main.js on the main branch.");
     }
@@ -107,8 +109,14 @@ class Net
     // Downloads to destFile (via .part). progress: 0..1 (or -1 when size unknown). Returns true on success.
     public static bool Download(string[] urls, string destFile, long minBytes, bool mustBeZip, Action<double> progress, Action<string> log)
     {
-        foreach (string url in urls)
+        // every URL is tried twice (a short network hiccup should not fail the whole install)
+        List<string> all = new List<string>();
+        foreach (string u in urls) { all.Add(u); all.Add(u); }
+        string lastUrl = null;
+        foreach (string url in all)
         {
+            if (url == lastUrl) Thread.Sleep(1500);
+            lastUrl = url;
             string part = destFile + ".part";
             try
             {
@@ -116,7 +124,8 @@ class Net
                 try { File.Delete(part); } catch { }
                 HttpWebRequest rq = (HttpWebRequest)WebRequest.Create(url);
                 rq.UserAgent = "StreamExtra-Setup";
-                rq.Timeout = 30000;
+                try { IWebProxy px = WebRequest.GetSystemWebProxy(); px.Credentials = CredentialCache.DefaultCredentials; rq.Proxy = px; } catch { }
+                rq.Timeout = 20000;
                 rq.ReadWriteTimeout = 30000;
                 rq.AllowAutoRedirect = true;
                 using (HttpWebResponse rs = (HttpWebResponse)rq.GetResponse())
@@ -148,6 +157,25 @@ class Net
             }
         }
         return false;
+    }
+
+    public static string GetText(string[] urls, Action<string> log)
+    {
+        foreach (string url in urls)
+        {
+            try
+            {
+                HttpWebRequest rq = (HttpWebRequest)WebRequest.Create(url);
+                rq.UserAgent = "StreamExtra-Setup";
+                try { IWebProxy px = WebRequest.GetSystemWebProxy(); px.Credentials = CredentialCache.DefaultCredentials; rq.Proxy = px; } catch { }
+                rq.Timeout = 15000; rq.ReadWriteTimeout = 15000;
+                using (HttpWebResponse rs = (HttpWebResponse)rq.GetResponse())
+                using (StreamReader sr = new StreamReader(rs.GetResponseStream(), Encoding.UTF8))
+                    return sr.ReadToEnd();
+            }
+            catch (Exception ex) { if (log != null) log("  text failed: " + url + " - " + ex.Message); }
+        }
+        return null;
     }
 
     public static bool IsZip(string path)
@@ -325,38 +353,118 @@ class Installer
         Report("s_done", 1.0);
     }
 
-    void InstallAppFiles(double a, double b)
+    // Reads the app copy that publish.ps1 embedded inside this exe (used when GitHub is unreachable on first install)
+    static bool ExtractEmbedded(string zipOut)
     {
-        Report("s_app", a);
-        string zf = Path.Combine(tmp, "app-main.zip");
-        string[] urls = new string[] {
-            "https://codeload.github.com/" + Cfg.Repo + "/zip/refs/heads/" + Cfg.Branch,
-            "https://github.com/" + Cfg.Repo + "/archive/refs/heads/" + Cfg.Branch + ".zip" };
-        if (!Net.Download(urls, zf, 10L * 1024, true, delegate(double p) { Report("s_app", Slice(a, b - 0.05, p)); }, Log))
-            throw new Exception(Strings.Get("noinet", Lang));
+        try
+        {
+            using (Stream rs = Assembly.GetExecutingAssembly().GetManifestResourceStream("app.zip"))
+            {
+                if (rs == null) return false;
+                using (FileStream fs = File.Create(zipOut)) { rs.CopyTo(fs); }
+            }
+            return Net.IsZip(zipOut);
+        }
+        catch { return false; }
+    }
 
-        // find "<root>/app/main.js" to learn the prefix
-        string prefix = null;
+    // jsDelivr mirror: works in places where github.com / codeload are blocked. Downloads app\* file by file.
+    bool DownloadViaJsDelivr(string appNew, double a, double b)
+    {
+        try
+        {
+            string list = Net.GetText(new string[] {
+                "https://data.jsdelivr.com/v1/package/gh/" + Cfg.Repo + "@" + Cfg.Branch + "/flat",
+                "https://data.jsdelivr.com/v1/packages/gh/" + Cfg.Repo + "@" + Cfg.Branch + "?structure=flat" }, Log);
+            if (list == null) return false;
+            List<string> files = new List<string>();
+            foreach (Match m in Regex.Matches(list, "\"name\"\\s*:\\s*\"(/app/[^\"]+)\""))
+                files.Add(Regex.Unescape(m.Groups[1].Value));
+            bool hasMain = false;
+            foreach (string f in files) if (f == "/app/main.js") hasMain = true;
+            if (!hasMain) return false;
+            Directory.CreateDirectory(appNew);
+            for (int i = 0; i < files.Count; i++)
+            {
+                string rel = files[i].Substring("/app/".Length);
+                string target = SafeJoin(appNew, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                string[] urls = new string[] {
+                    "https://cdn.jsdelivr.net/gh/" + Cfg.Repo + "@" + Cfg.Branch + files[i],
+                    "https://fastly.jsdelivr.net/gh/" + Cfg.Repo + "@" + Cfg.Branch + files[i],
+                    "https://gcore.jsdelivr.net/gh/" + Cfg.Repo + "@" + Cfg.Branch + files[i],
+                    "https://raw.githubusercontent.com/" + Cfg.Repo + "/" + Cfg.Branch + files[i] };
+                if (!Net.Download(urls, target, 0, false, null, Log)) return false;
+                Report("s_app", a + (b - a) * (i + 1) / files.Count);
+            }
+            return true;
+        }
+        catch (Exception ex) { Log("jsdelivr failed: " + ex.Message); return false; }
+    }
+
+    static string FindPrefix(string zf)
+    {
         using (ZipArchive z = ZipFile.OpenRead(zf))
         {
             foreach (ZipArchiveEntry e in z.Entries)
             {
                 string n = e.FullName.Replace('\\', '/');
                 if (n.EndsWith("/app/main.js", StringComparison.Ordinal) || n == "app/main.js")
-                { prefix = n.Substring(0, n.Length - "main.js".Length); break; }
+                    return n.Substring(0, n.Length - "main.js".Length);
             }
         }
-        if (prefix == null) throw new Exception(Strings.Get("badzip", Lang));
+        return null;
+    }
 
-        Report("s_unpack", b - 0.04);
+    public bool AllowEmbedded = false;     // true only for the first install (an update must never go back to an older embedded copy)
+
+    void InstallAppFiles(double a, double b)
+    {
+        Report("s_app", a);
         string res = Path.Combine(Dir, "resources");
         string appNew = Path.Combine(res, "app_new");
         string appDir = Path.Combine(res, "app");
         string appOld = Path.Combine(res, "app_old");
+        Directory.CreateDirectory(res);
         try { if (Directory.Exists(appNew)) Directory.Delete(appNew, true); } catch { }
         try { if (Directory.Exists(appOld)) Directory.Delete(appOld, true); } catch { }
-        Directory.CreateDirectory(appNew);
-        ExtractAll(zf, appNew, prefix);
+
+        bool got = false;
+
+        // 1) GitHub zip (3 mirrors/hosts)
+        string zf = Path.Combine(tmp, "app-main.zip");
+        string[] urls = new string[] {
+            "https://codeload.github.com/" + Cfg.Repo + "/zip/refs/heads/" + Cfg.Branch,
+            "https://github.com/" + Cfg.Repo + "/archive/refs/heads/" + Cfg.Branch + ".zip" };
+        if (Net.Download(urls, zf, 10L * 1024, true, delegate(double p) { Report("s_app", Slice(a, b - 0.05, p)); }, Log))
+        {
+            string prefix = FindPrefix(zf);
+            if (prefix != null) { Report("s_unpack", b - 0.04); Directory.CreateDirectory(appNew); ExtractAll(zf, appNew, prefix); got = true; }
+        }
+
+        // 2) jsDelivr mirror (GitHub blocked / slow)
+        if (!got)
+        {
+            Report("s_mirror", a);
+            try { if (Directory.Exists(appNew)) Directory.Delete(appNew, true); } catch { }
+            got = DownloadViaJsDelivr(appNew, a, b - 0.04);
+        }
+
+        // 3) copy embedded inside Setup.exe (first install only)
+        if (!got && AllowEmbedded)
+        {
+            Report("s_embedded", b - 0.05);
+            try { if (Directory.Exists(appNew)) Directory.Delete(appNew, true); } catch { }
+            string ez = Path.Combine(tmp, "app-embedded.zip");
+            if (ExtractEmbedded(ez))
+            {
+                string prefix = FindPrefix(ez);
+                Directory.CreateDirectory(appNew);
+                ExtractAll(ez, appNew, prefix == null ? "app/" : prefix);
+                got = File.Exists(Path.Combine(appNew, "main.js"));
+            }
+        }
+        if (!got) throw new Exception(Strings.Get("noinet", Lang));
 
         // keep the user's local Kick app keys (kick-app.json) if they exist
         string oldKick = Path.Combine(appDir, "kick-app.json");
@@ -561,6 +669,7 @@ class MainForm : Form
             try
             {
                 Installer ins = new Installer();
+                ins.AllowEmbedded = !updateMode;
                 ins.Dir = dir; ins.Lang = lang; ins.Theme = theme;
                 ins.Log = delegate(string s) { };
                 ins.Report = delegate(string k, double f) { SetStatus(k, f); };
