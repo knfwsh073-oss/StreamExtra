@@ -1689,30 +1689,54 @@ function cmpVer(a, b) {
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return d > 0 ? 1 : -1; }
   return 0;
 }
-// يجرّب عدة مصادر بالترتيب (GitHub مباشرة ثم مرايا بديلة) حتى لا يفشل الفحص إذا كان GitHub بطيئاً أو محجوباً
+// يفحص كل المصادر بالتوازي ويأخذ "أعلى" إصدار موجود: هيك لو مصدر (مثل jsDelivr أو كاش GitHub) رجّع نسخة قديمة، ما بنخدع فيها.
+// أول مصدر "commit": بنسأل GitHub API عن آخر commit بالفرع ثم بنقرأ package.json بالـ SHA مباشرة، وهذا بتجاوز أي كاش للفرع.
 const UPD_SOURCES = () => [
   { name: 'GitHub', url: `https://raw.githubusercontent.com/${GH_REPO}/${GH_BRANCH}/app/package.json?t=${Date.now()}` },
-  { name: 'GitHub API', url: `https://api.github.com/repos/${GH_REPO}/contents/app/package.json?ref=${GH_BRANCH}`, headers: { Accept: 'application/vnd.github.raw' } },
-  { name: 'jsDelivr', url: `https://cdn.jsdelivr.net/gh/${GH_REPO}@${GH_BRANCH}/app/package.json` },
-  { name: 'jsDelivr-2', url: `https://fastly.jsdelivr.net/gh/${GH_REPO}@${GH_BRANCH}/app/package.json` }
+  { name: 'GitHub API', url: `https://api.github.com/repos/${GH_REPO}/contents/app/package.json?ref=${GH_BRANCH}&t=${Date.now()}`, headers: { Accept: 'application/vnd.github.raw' } },
+  { name: 'GitHub commit', sha: true },
+  { name: 'jsDelivr', url: `https://cdn.jsdelivr.net/gh/${GH_REPO}@${GH_BRANCH}/app/package.json?t=${Date.now()}` },
+  { name: 'jsDelivr-2', url: `https://fastly.jsdelivr.net/gh/${GH_REPO}@${GH_BRANCH}/app/package.json?t=${Date.now()}` }
 ];
-async function fetchRemotePkg() {
+async function fetchText(url, headers) {
+  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 7000);
+  try {
+    const r = await net.fetch(url, { signal: ctl.signal, headers: Object.assign({ 'Cache-Control': 'no-cache', Pragma: 'no-cache', 'User-Agent': 'StreamExtra-Updater' }, headers || {}) });
+    clearTimeout(to);
+    if (!r.ok) return { err: r.status === 404 ? 'notfound' : 'http' + r.status };
+    return { text: await r.text() };
+  } catch (e) { clearTimeout(to); return { err: (e && e.name === 'AbortError') ? 'timeout' : 'offline' }; }
+}
+async function fetchFromSource(src) {
   let lastErr = 'offline';
-  for (const src of UPD_SOURCES()) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 7000);
-      try {
-        const r = await net.fetch(src.url, { signal: ctl.signal, headers: Object.assign({ 'Cache-Control': 'no-cache', 'User-Agent': 'StreamExtra-Updater' }, src.headers || {}) });
-        clearTimeout(to);
-        if (r.status === 404) { lastErr = 'notfound'; break; }                 // الملف غير موجود في هذا المصدر: جرّب المصدر التالي
-        if (!r.ok) { lastErr = 'http' + r.status; continue; }
-        const j = JSON.parse((await r.text()).replace(/^\uFEFF/, ''));
-        if (j && j.version) return { pkg: j, source: src.name };
-        lastErr = 'badjson'; break;
-      } catch (e) { clearTimeout(to); lastErr = (e && e.name === 'AbortError') ? 'timeout' : 'offline'; }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let url = src.url;
+    if (src.sha) {
+      const c = await fetchText(`https://api.github.com/repos/${GH_REPO}/commits/${GH_BRANCH}?t=${Date.now()}`, { Accept: 'application/vnd.github.sha' });
+      if (c.err) { lastErr = c.err; if (c.err === 'notfound') break; continue; }
+      const sha = String(c.text || '').trim();
+      if (!/^[0-9a-f]{40}$/i.test(sha)) { lastErr = 'badjson'; break; }
+      url = `https://raw.githubusercontent.com/${GH_REPO}/${sha}/app/package.json`;
     }
+    const r = await fetchText(url, src.headers);
+    if (r.err) { lastErr = r.err; if (r.err === 'notfound') break; continue; }
+    try {
+      const j = JSON.parse(String(r.text).replace(/^\uFEFF/, ''));
+      if (j && j.version) return { pkg: j, source: src.name };
+      lastErr = 'badjson'; break;
+    } catch (e) { lastErr = 'badjson'; break; }
   }
-  return { error: lastErr };
+  return { error: lastErr, source: src.name };
+}
+async function fetchRemotePkg() {
+  const results = await Promise.all(UPD_SOURCES().map(fetchFromSource));
+  let best = null, lastErr = 'offline';
+  for (const r of results) {
+    if (r.pkg) { if (!best || cmpVer(r.pkg.version, best.pkg.version) > 0) best = r; }
+    else if (r.error && r.error !== 'offline') lastErr = r.error;
+  }
+  try { console.log('[update] ' + results.map(r => r.name || r.source + ':' + (r.pkg ? r.pkg.version : r.error)).join(' | ')); } catch (e) {}
+  return best || { error: lastErr };
 }
 async function checkUpdate() {
   const out = { current: APP_VERSION, currentDate: APP_DATE, latest: APP_VERSION, latestDate: APP_DATE, available: false, canUpdate: isSetupInstall(), checkedAt: Date.now(), notes: null, source: '' };
