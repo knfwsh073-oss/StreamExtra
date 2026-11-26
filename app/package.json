@@ -5,20 +5,20 @@
   "main": "main.js",
   "author": "Stream Extra",
   "license": "MIT",
-  "version": "1.3",
+  "version": "1.4",
   "releaseDate": "2026-11-26",
   "notes": {
     "ar": [
-      "التحديث صار من داخل البرنامج: يحمّل في مجلد التثبيت الذي اخترته، ثم يُعاد تشغيل البرنامج تلقائياً",
-      "صفحة التحديثات بتصميم جديد وتدعم العربية والإنجليزية حسب لغتك",
-      "شكل جديد للسيتب مطابق لشكل البرنامج",
-      "تحميل أكثر ثباتاً: خوادم بديلة إذا كان GitHub بطيئاً أو محجوباً"
+      "تراجع وإعادة: Ctrl+Z للتراجع و Ctrl+Shift+Z للإعادة (يشتغل مع لوحة المفاتيح العربية أيضاً)",
+      "إصلاح: زر وصفحة التحديثات تظهر بالعربية عند اختيار العربية",
+      "ربط Kick كامل في صفحة واحدة",
+      "جودة 4K فعلية: القياس والترميز والإرسال بدقة 3840×2160 عند اختيارها"
     ],
     "en": [
-      "Updates now run inside the app: files download into the folder you chose, then the app restarts automatically",
-      "New Updates page in Arabic and English, following your language",
-      "New Setup look that matches the app",
-      "More reliable downloads: backup servers when GitHub is slow or blocked"
+      "Undo / Redo: Ctrl+Z to undo and Ctrl+Shift+Z to redo (works on Arabic keyboard layout too)",
+      "Fix: the Updates button and page now show in Arabic when Arabic is selected",
+      "Kick linking is now fully in one page",
+      "True 4K quality: capture, encoding and output at 3840×2160 when selected"
     ]
   }
 }

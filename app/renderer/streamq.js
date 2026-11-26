@@ -44,6 +44,7 @@
     sqNoteOk: 'الإعداد مناسب. لو انقطع البث أو سخن الجهاز، خفّف الدقة أو الإطارات.',
     sqNoteLowBr: '⚠ الجودة (Bitrate) منخفضة لهذه الدقة؛ ستظهر الصورة ضعيفة. اختر الموصى به ({r} kbps).',
     sqNoteHeavy: '⚠ هذه الدقة تحتاج معالج قوي ورفع إنترنت عالٍ. لو تقطّع البث، اختر دقة أقل أو 30 إطار.',
+    sqNoteKick: '⚠ حدود Kick المعلنة: أقصى دقة 1080p و60 إطار وأقصى بت ريت 8000 kbps (H.264 و CBR). البرنامج يرسل الدقة المختارة فعلياً، لكن Kick هي اللي تقرر ما تقبله وما يظهر للمشاهدين في خيارات الجودة، وقد ترفض أو تخفّض ما فوق 1080p.',
     sqNote4k: '⚠ بث 4K يتطلب جهازاً قوياً جداً ورفعاً ثابتاً (20+ Mbps)، وبعض المنصات تحدّ الدقة والجودة القصوى المسموحة. جرّب «فحص الإنترنت والجهاز» أولاً.',
     sqNoteUp: 'المشهد يُرسم فعلياً بدقة البث ({w}×{h}) — النص والأشكال حادّة، والكاميرا والشاشة تُلتقط بنفس الدقة إذا جهازك يدعمها. الصور والفيديوهات منخفضة الدقة تبقى بتفاصيلها الأصلية. بعد بدء البث ستجد القياس الحقيقي في صفحة «مراجعة وقياس».'
   });
@@ -72,6 +73,7 @@
     sqNoteOk: 'Settings look good. If the stream drops or your PC gets hot, lower the resolution or frame rate.',
     sqNoteLowBr: '⚠ Bitrate is low for this resolution; the picture will look soft. Pick the recommended value ({r} kbps).',
     sqNoteHeavy: '⚠ This resolution needs a strong CPU and fast upload. If the stream stutters, choose a lower resolution or 30 fps.',
+    sqNoteKick: '⚠ Kick\'s published limits: max 1080p, 60 fps and 8,000 kbps (H.264, CBR). The app really sends the resolution you pick, but Kick decides what it accepts and which quality options viewers see, and it may reject or downscale anything above 1080p.',
     sqNote4k: '⚠ 4K streaming needs a very strong PC and a steady upload (20+ Mbps), and some platforms cap the maximum resolution/bitrate. Run the "Internet & device check" first.',
     sqNoteUp: 'The scene is truly rendered at the stream resolution ({w}×{h}) — text and shapes are sharp, and the camera/screen are captured at that resolution when your device supports it. Low-resolution images/videos keep their own detail. After you go live, see the real measurements in "Review & measure".'
   });
@@ -155,6 +157,7 @@
       + `<div class="sq-gb">${esc(t('sqPerHour', { g: gb }))}</div>`;
     // ملاحظات ذكية
     const rec = SQ.rec(res, fps), notes = [];
+    if (res > 1080 || br > 8000) notes.push(t('sqNoteKick'));
     if (res >= 2160) notes.push(t('sqNote4k'));
     else if (res >= 1440 || (res >= 1080 && fps === 60)) notes.push(t('sqNoteHeavy'));
     if (br < rec * 0.6) notes.push(t('sqNoteLowBr', { r: rec.toLocaleString('en-US') }));

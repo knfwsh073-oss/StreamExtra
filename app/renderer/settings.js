@@ -10,13 +10,12 @@
 (() => {
   const PAGES = {
     general:     { ic: 'palette',  grp: 0 },
-    dest:        { ic: 'radio',    grp: 1, foot: true },
     video:       { ic: 'monitor',  grp: 1, foot: true },
     encoder:     { ic: 'sliders',  grp: 1, foot: true },
     audio:       { ic: 'music',    grp: 1, foot: true },
     network:     { ic: 'activity', grp: 1, foot: true },
     review:      { ic: 'check',    grp: 1, foot: true },
-    kick:        { ic: 'link',     grp: 2 },
+    kick:        { ic: 'link',     grp: 2, foot: true },
     hotkeys:     { ic: 'keyboard', grp: 3 },
     transitions: { ic: 'shuffle',  grp: 3 },
     updates:     { ic: 'refresh',  grp: 4 }
@@ -29,14 +28,14 @@
     pg_dest: 'رابط ومفتاح البث من Kick. هنا يُرسل البرنامج الفيديو.', pg_video: 'الدقة والإطارات وجودة الصورة (Bitrate). بطاقات جاهزة أو ضبط يدوي.',
     pg_encoder: 'كيف يضغط البرنامج الفيديو قبل إرساله: السرعة، نمط الإرسال، التأخير.', pg_audio: 'جودة صوت البث وتمرير صوت التطبيقات.',
     pg_network: 'قِس سرعة رفعك وأداء جهازك واحصل على إعداد مقترح.', pg_review: 'ملخص كل إعدادات البث + قياس حقيقي أثناء البث.',
-    pg_kick: 'قناتك على Kick وتسجيل الدخول للشات والإشراف.', pg_hotkeys: 'اختصارات لوحة المفاتيح للمشاهد والبث والمايك.', pg_transitions: 'شكل ومدة الانتقال بين المشاهد.',
+    pg_kick: 'كل ربط Kick في صفحة وحدة: القناة، رابط ومفتاح البث، وتسجيل الدخول للشات والإشراف.', pg_hotkeys: 'اختصارات لوحة المفاتيح للمشاهد والبث والمايك.', pg_transitions: 'شكل ومدة الانتقال بين المشاهد.',
     pgLangS: 'اختر لغة الواجهة، والاتجاه يتغيّر تلقائياً.', pgThemeS: 'مظهر نهاري أو ليلي.',
     stAutoSaved: 'تُحفظ التغييرات تلقائياً', stAutoDone: 'تم الحفظ تلقائياً', stLiveNote: 'البث شغّال — التغييرات تُطبَّق من البث القادم',
     lvT: 'القياس الفعلي', lvS: 'أرقام حقيقية يقرأها البرنامج من المشفّر (ffmpeg) أثناء البث، وليست من الإعدادات.',
     lvIdle: 'ابدأ البث لترى القياس الحقيقي', lvIdleRow: 'لا يوجد بث شغّال الآن.',
     lvIn: 'دقة الصورة الواصلة للمشفّر', lvOut: 'دقة الإرسال الفعلية إلى Kick', lvFps: 'الإطارات المشفّرة فعلياً', lvBr: 'سرعة الإرسال الفعلية (متوسط)',
     lvDrop: 'إطارات متساقطة', lvSpeed: 'سرعة المشفّر',
-    lvWant: 'المطلوب', lvOk: 'مطابق لإعداداتك ✓', lvSlow: 'المشفّر لا يلحق — خفّف الدقة أو الإطارات', lvMis: 'الدقة لا تطابق الإعداد', lvMeasuring: 'جاري القياس…',
+    lvWant: 'المطلوب', lvOk: 'مطابق لإعداداتك ✓', lvSlow: 'المشفّر لا يلحق — خفّف الدقة أو الإطارات', lvMis: 'الدقة لا تطابق الإعداد', lvUp: 'الدخل أقل من المطلوب — ليس دقة حقيقية', lvUpToast: 'الصورة الواصلة للمشفّر {a} فقط وليست {b}. الخرج مكبّر وليس دقة حقيقية. خفّف الدقة أو الإطارات أو جرّب فحص الجهاز.', lvMeasuring: 'جاري القياس…',
     lvRt: 'أقل من 1× = جهازك لا يلحق بالجودة المختارة',
     sbMeas: 'القياس الفعلي للبث',
     testListenMic: 'تكلّم الآن — تسمع صوتك في سماعاتك (استخدم سماعات رأس لتجنّب الصدى). اضغط «إيقاف التجربة» لقطعه فوراً.',
@@ -49,14 +48,14 @@
     pg_dest: 'Your Kick stream URL and key. This is where the app sends video.', pg_video: 'Resolution, frame rate and picture quality (bitrate). Ready presets or manual.',
     pg_encoder: 'How the app compresses video before sending: speed, send mode, latency.', pg_audio: 'Stream audio quality and app-audio routing.',
     pg_network: 'Measure your upload speed and PC performance and get a suggested setup.', pg_review: 'Summary of every stream setting + real measurements while live.',
-    pg_kick: 'Your Kick channel and sign-in for chat and moderation.', pg_hotkeys: 'Keyboard shortcuts for scenes, streaming and the mic.', pg_transitions: 'Style and duration of scene transitions.',
+    pg_kick: 'All Kick linking in one page: channel, stream URL & key, and sign-in for chat and moderation.', pg_hotkeys: 'Keyboard shortcuts for scenes, streaming and the mic.', pg_transitions: 'Style and duration of scene transitions.',
     pgLangS: 'Pick the interface language; direction switches automatically.', pgThemeS: 'Light or dark appearance.',
     stAutoSaved: 'Changes are saved automatically', stAutoDone: 'Saved automatically', stLiveNote: 'You are live — changes apply to the next stream',
     lvT: 'Real measurements', lvS: 'Real numbers read from the encoder (ffmpeg) while you stream — not from the settings.',
     lvIdle: 'Go live to see real measurements', lvIdleRow: 'No stream is running right now.',
     lvIn: 'Picture size reaching the encoder', lvOut: 'Actual output size sent to Kick', lvFps: 'Frames actually encoded', lvBr: 'Actual send rate (average)',
     lvDrop: 'Dropped frames', lvSpeed: 'Encoder speed',
-    lvWant: 'requested', lvOk: 'Matches your settings ✓', lvSlow: 'Encoder is falling behind — lower the resolution or frame rate', lvMis: 'Resolution does not match the setting', lvMeasuring: 'Measuring…',
+    lvWant: 'requested', lvOk: 'Matches your settings ✓', lvSlow: 'Encoder is falling behind — lower the resolution or frame rate', lvMis: 'Resolution does not match the setting', lvUp: 'Input is lower than requested — not true resolution', lvUpToast: 'The picture reaching the encoder is only {a}, not {b}. The output is upscaled, not true resolution. Lower the resolution or frame rate, or run the device check.', lvMeasuring: 'Measuring…',
     lvRt: 'Below 1× = your PC cannot keep up with the chosen quality',
     sbMeas: 'Real stream measurements',
     testListenMic: 'Speak now — you hear your voice in your headphones (use headphones to avoid echo). Press "Stop test" to cut it instantly.',
@@ -112,6 +111,7 @@
     if (!m || !m.outW) return { k: 'lvMeasuring', cls: '' };
     const w = m.want || {};
     if (m.outW !== w.w || m.outH !== w.h) return { k: 'lvMis', cls: 'bad' };
+    if (m.inW && (m.inW !== w.w || m.inH !== w.h)) return { k: 'lvUp', cls: 'bad' };   // خرج بالدقة المطلوبة لكن الدخل أقل: تكبير وليس دقة حقيقية
     if (m.frames > 90 && (m.speed && m.speed < 0.97 || m.fps && m.fps < w.fps * 0.88)) return { k: 'lvSlow', cls: 'bad' };
     return { k: 'lvOk', cls: 'ok' };
   }
@@ -122,7 +122,7 @@
     pill.textContent = t(v.k); pill.className = 'sp-pill ' + v.cls;
     const dim = (a, b) => a ? a + '×' + b : '…';
     const R = [
-      [t('lvIn'), dim(M.inW, M.inH), M.inW && M.inW === w.w ? 'ok' : ''],
+      [t('lvIn'), dim(M.inW, M.inH), M.inW ? (M.inW === w.w && M.inH === w.h ? 'ok' : 'bad') : ''],
       [t('lvOut'), dim(M.outW, M.outH) + (M.codec ? ' · ' + M.codec.toUpperCase() : ''), M.outW === w.w && M.outH === w.h ? 'ok' : 'bad'],
       [t('lvFps'), (M.fps ? M.fps.toFixed(1) : '…') + ' fps  (' + t('lvWant') + ' ' + w.fps + ')', M.fps && M.fps >= w.fps * 0.9 ? 'ok' : (M.frames > 90 ? 'bad' : '')],
       [t('lvBr'), M.kbps ? mbps(M.kbps) + '  (' + t('lvWant') + ' ' + mbps(w.br) + ')' : '…', ''],
@@ -141,9 +141,10 @@
     el.hidden = false; el.className = 'sb-item ltr-i sb-meas ' + v.cls; el.title = t('sbMeas') + ' — ' + t(v.k);
     el.textContent = M.outW + '×' + M.outH + ' · ' + (M.fps ? Math.round(M.fps) : '…') + ' fps · ' + (M.kbps ? mbps(M.kbps) : '…');
   }
-  if (window.api && api.onStats) api.onStats(m => { M = m; renderSb(); if (curTab === 'review' && $('ov').classList.contains('open')) renderLive(); });
+  let warnedUp = false;
+  if (window.api && api.onStats) api.onStats(m => { M = m; if (!warnedUp && verdict(m).k === 'lvUp') { warnedUp = true; try { toast('⚠ ' + t('lvUpToast', { a: m.inW + '×' + m.inH, b: (m.want || {}).w + '×' + (m.want || {}).h }), 10000); } catch (e) {} } renderSb(); if (curTab === 'review' && $('ov').classList.contains('open')) renderLive(); });
   if (window.api && api.onStatus) api.onStatus(p => {
-    if (p.state === 'live') { M = null; }
+    if (p.state === 'live') { M = null; warnedUp = false; }
     if (p.state === 'stopped' || p.state === 'error') { renderSb(); }
     renderSb(); paintAuto();
   });

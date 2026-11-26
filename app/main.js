@@ -160,7 +160,7 @@ function startFfmpeg(s) {
     if (hdr.length < 8000 && !meas.outW) {
       hdr += txt;
       const inM = /Input #0[\s\S]*?Stream #0:0[^\n]*?Video:[^\n]*?(\d{3,5})x(\d{3,5})/.exec(hdr);
-      if (inM) { meas.inW = +inM[1]; meas.inH = +inM[2]; }
+      if (inM) { meas.inW = +inM[1]; meas.inH = +inM[2]; meas.inMis = (meas.inW !== vw || meas.inH !== vh); }   // الصورة الداخلة أقل/مختلفة عن المطلوب → الخرج مكبّر وليس بدقة حقيقية
       const outL = /Output #0[\s\S]*?Stream #0:0[^\n]*?Video:([^\n]*)/.exec(hdr);
       if (outL) {
         const ln = outL[1], sz = /(\d{3,5})x(\d{3,5})/.exec(ln), cd = /^\s*(\w+)/.exec(ln), fp = /([\d.]+)\s*fps/.exec(ln);

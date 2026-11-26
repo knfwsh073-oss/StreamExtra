@@ -110,7 +110,7 @@
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   const el = document.createElement('div'); el.id = 'seUpd'; document.body.appendChild(el);
 
-  const lg = () => (typeof lang !== 'undefined' && lang === 'en') ? 'en' : 'ar';
+  const lg = () => { try { return lang === 'en' ? 'en' : 'ar'; } catch (e) { return document.documentElement.lang === 'en' ? 'en' : 'ar'; } };
   const L = () => TX[lg()];
   const g = id => document.getElementById(id);
   const tt = k => (typeof t === 'function' ? t(k) : k);
@@ -258,6 +258,9 @@
   const _ai = applyI18n;
   applyI18n = function () { _ai(); try { paintPage(); } catch (e) {} };
 
+  // updater.js يتحمّل بعد app.js، وكان البرنامج يترجم الواجهة قبل إضافة نصوص التحديثات، فكان زر/صفحة التحديثات تظهر بدون ترجمة.
+  // الحل: نعيد تطبيق اللغة مرة وحدة بعد إضافة نصوصنا.
+  try { applyI18n(); } catch (e) {}
   setTimeout(() => check(false), 1500);                 // عند فتح البرنامج
   setInterval(() => check(false), EV);                  // وكل نصف ساعة أثناء بقائه مفتوحاً
 })();

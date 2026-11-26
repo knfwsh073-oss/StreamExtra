@@ -203,6 +203,8 @@ const I18N = {
     mAlready:'Stream is already running', mNeedKey:'Enter the Stream URL and Stream Key in Settings', mNoFf:'ffmpeg.exe not found. Run Build_StreamExtra.cmd again', mFfFail:'Could not start ffmpeg', mFfErr:'ffmpeg error', mDisc:'Connection to Kick lost. Check the URL and key.'
   }
 };
+Object.assign(I18N.ar, { undoDone: 'تم التراجع', redoDone: 'تمت الإعادة', undoNone: 'لا يوجد شي للتراجع عنه', redoNone: 'لا يوجد شي لإعادته' });
+Object.assign(I18N.en, { undoDone: 'Undone', redoDone: 'Redone', undoNone: 'Nothing to undo', redoNone: 'Nothing to redo' });
 Object.assign(I18N.ar, { delayL: 'التأخير', delayTip: 'تأخير البث من البرنامج حتى سيرفر Kick (تجميع + ترميز + شبكة). مشغّل Kick عند المشاهد يضيف عليه حسب وضع Kick.' });
 Object.assign(I18N.en, { delayL: 'Delay', delayTip: 'Stream delay from the app to the Kick server (buffering + encoding + network). Kick\'s own player adds more on the viewer side.' });
 let lang = LS.get('se_lang', 'ar');
@@ -229,8 +231,54 @@ let sel = null;
 const cur = () => S.scenes.find(s => s.id === S.current) || S.scenes[0];
 const selItem = () => { const sc = cur(); return sc && sel ? sc.items.find(i => i.id === sel) : null; };
 let _pt; const persist = () => { clearTimeout(_pt); _pt = setTimeout(saveScenes, 300); };
-function saveScenes(){ LS.set('se_scenes', JSON.stringify(S)); }
+function saveScenes(){ LS.set('se_scenes', JSON.stringify(S)); try{ histCommit(); }catch(e){} }
 window.addEventListener('beforeunload', saveScenes);
+/* ================= Undo / Redo (Ctrl+Z / Ctrl+Shift+Z) =================
+   لقطات للمشاهد (بدون المشهد الحالي، فتبديل المشهد ما يُحسب خطوة). كل تغيير يمرّ على persist() يصير خطوة وحدة. */
+const HIST = { undo:[], redo:[], cur:null, max:100, busy:false };
+const histSnap = () => JSON.stringify(S.scenes);
+function histCommit(){
+  if(HIST.busy) return;
+  const s = histSnap();
+  if(HIST.cur === null){ HIST.cur = s; return; }
+  if(s === HIST.cur) return;
+  HIST.undo.push(HIST.cur); if(HIST.undo.length > HIST.max) HIST.undo.shift();
+  HIST.cur = s; HIST.redo.length = 0;
+}
+function histFlush(){ clearTimeout(_pt); saveScenes(); }
+function histUsedAssets(){   // الملفات المستخدمة في خطوات التراجع/الإعادة (حتى لا تنحذف من التخزين وتضيع عند التراجع)
+  const used = new Set(), re = /"assetId":"([^"]+)"/g;
+  [HIST.cur].concat(HIST.undo, HIST.redo).forEach(j => { if(!j) return; let m; re.lastIndex = 0; while((m = re.exec(j))) used.add(m[1]); });
+  return used;
+}
+function histApply(snap){
+  HIST.busy = true;
+  try{
+    const scenes = JSON.parse(snap), keepId = S.current;
+    const oldItems = []; S.scenes.forEach(sc => sc.items.forEach(i => oldItems.push(i)));
+    scenes.forEach(sc => { sc.bg = sc.bg || ['#0a0305', '#4a0814']; sc.items = (sc.items || []).filter(i => TYPE_DEF[i.type]).map(i => mkItem(i.type, i)); });
+    const keep = new Set(); scenes.forEach(sc => sc.items.forEach(i => keep.add(i.id)));
+    oldItems.forEach(it => { if(!keep.has(it.id)){ stopCap(it.id); clearHide(it.id); dropMedia(it); endTest(it.id); liveFail.delete(it.id); } });
+    S.scenes = scenes;
+    if(!S.scenes.some(s => s.id === keepId)) S.current = S.scenes[0].id; else S.current = keepId;
+    if(sel && !cur().items.some(i => i.id === sel)) sel = null;
+    S.scenes.forEach(sc => sc.items.forEach(i => { if(i.type === 'image') loadImg(i.assetId); }));
+    HIST.cur = histSnap();   // اللقطة بعد التطبيع (نفس ترتيب الحقول) حتى لا تُحسب خطوة جديدة بالغلط
+    enterScene(cur()); syncLive(); pruneSites(); renderAll();
+    LS.set('se_scenes', JSON.stringify(S));
+  } finally { HIST.busy = false; }
+}
+function undo(){
+  histFlush();
+  if(!HIST.undo.length){ toast(t('undoNone'), 1400); return; }
+  HIST.redo.push(HIST.cur); histApply(HIST.undo.pop()); toast('↶ ' + t('undoDone'), 1200);
+}
+function redo(){
+  histFlush();
+  if(!HIST.redo.length){ toast(t('redoNone'), 1400); return; }
+  HIST.undo.push(HIST.cur); histApply(HIST.redo.pop()); toast('↷ ' + t('redoDone'), 1200);
+}
+
 
 const RATIO = new Set(['image', 'video', 'screen', 'window', 'cam']);
 const CAPT = new Set(['screen', 'window', 'cam']);
@@ -509,7 +557,7 @@ function dropMedia(it){
 }
 async function gcAssets(){
   try{
-    const used = new Set(); S.scenes.forEach(s => s.items.forEach(i => i.assetId && used.add(i.assetId)));
+    const used = histUsedAssets(); S.scenes.forEach(s => s.items.forEach(i => i.assetId && used.add(i.assetId)));
     for(const k of await idbKeys()){ if(!used.has(k)){ await idbDel(k); if(imgs[k]){ URL.revokeObjectURL(imgs[k].src); delete imgs[k]; } } }
   }catch(e){}
 }
@@ -1398,6 +1446,12 @@ window.addEventListener('pointerup', () => { if(drag){ drag = null; persist(); }
 window.addEventListener('keydown', e => {
   if(e.key === 'Escape'){ closeCtx(); closeDlg(); $('ov').classList.remove('open'); return; }
   if(document.querySelector('.overlay.open')) return;
+  if((e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'KeyZ' || e.code === 'KeyY')){   // e.code يشتغل مع أي لغة كيبورد (عربي/إنجليزي)
+    const te = e.target, ty = te && te.tagName === 'INPUT' ? String(te.type || 'text').toLowerCase() : '';
+    const typing = (te && (te.tagName === 'TEXTAREA' || te.isContentEditable)) || (ty && !['checkbox', 'radio', 'range', 'button', 'color', 'file'].includes(ty));
+    if(!typing && !drag){ e.preventDefault(); if(e.code === 'KeyY' || e.shiftKey) redo(); else undo(); }
+    return;
+  }
   const tg = e.target.tagName; if(tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
   const it = selItem();
   if(e.key === 'Delete'){ if(lastDock === 'scenes') delScene(); else if(it) confirmRemoveItem(it.id); return; }
@@ -1450,9 +1504,9 @@ function applyDock(){ document.documentElement.style.setProperty('--dock-h', doc
 })();
 
 /* صفحات الإعدادات: لكل قسم صفحة كاملة (الأزرار على اليمين). العناوين والأوصاف في settings.js */
-const MT = { general:'general', dest:'stDest', video:'stVideo', encoder:'stEncoder', audio:'audioTab', network:'stNetwork', review:'stReview', kick:'kickTab', hotkeys:'hkTitle', transitions:'transition', updates:'updTab' };
-const PANES = { general:'mGeneral', dest:'mDest', video:'mVideo', encoder:'mEncoder', audio:'mAudio', network:'mNetwork', review:'mReview', kick:'mKick', hotkeys:'mHotkeys', transitions:'mTransitions', updates:'mUpdates' };
-const TAB_ALIAS = { streaming:'dest', recording:'video', controls:'hotkeys' };   // أسماء الصفحات القديمة
+const MT = { general:'general', video:'stVideo', encoder:'stEncoder', audio:'audioTab', network:'stNetwork', review:'stReview', kick:'kickTab', hotkeys:'hkTitle', transitions:'transition', updates:'updTab' };
+const PANES = { general:'mGeneral', video:'mVideo', encoder:'mEncoder', audio:'mAudio', network:'mNetwork', review:'mReview', kick:'mKick', hotkeys:'mHotkeys', transitions:'mTransitions', updates:'mUpdates' };
+const TAB_ALIAS = { streaming:'kick', dest:'kick', recording:'video', controls:'hotkeys' };   // أسماء الصفحات القديمة
 let curTab = 'general';
 function openSettings(tab){ document.body.classList.remove('k-bigmode'); fillForm(); $('hkGlobal').checked = hkGlobal; $('routeApps').checked = routeApps; mTab(tab || curTab || 'general'); $('ov').classList.add('open'); stopAllTests(); }
 function closeSettingsModal(){ if(hkRec) stopRec(); $('ov').classList.remove('open'); }
@@ -1685,7 +1739,7 @@ if(window.api && api.onHotkey) api.onHotkey(id => fireHotkey(id));
 
 /* ================= Init ================= */
 paintIcons();
-S = loadScenes(); loadSceneMaster();
+S = loadScenes(); HIST.cur = histSnap(); loadSceneMaster();
 applyTheme(); applyGuides(); applyDock();
 applyLook(); applyI18n(); renderAll();
 S.scenes.forEach(sc => sc.items.forEach(i => { if(i.type === 'image') loadImg(i.assetId); }));

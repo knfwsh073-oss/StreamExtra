@@ -41,3 +41,12 @@ C) Old local build (no updates)
 Build_StreamExtra.cmd still builds a portable "StreamExtra" folder for testing. The Update page is disabled there.
 
 Your settings and Kick link are stored in %AppData%\StreamExtra (+ a backup in %LocalAppData%\StreamExtra-Backup).
+
+v1.4 changes
+------------
+- Undo / Redo: Ctrl+Z / Ctrl+Shift+Z (also Ctrl+Y). Works on any keyboard layout (Arabic too). Covers scene/source edits (add, delete, move, resize, properties).
+- Updates button/page now follow the app language from the first paint (Arabic shows Arabic).
+- Kick linking is one page: Settings -> Kick link now holds channel, stream URL + key, chat sign-in and developer app. The separate "Destination" page was removed.
+- Stream quality: the review page now flags "fake" resolution (when the picture reaching the encoder is smaller than the chosen one and ffmpeg only upscales it).
+  Note: Kick's published limit is 1080p / 8000 kbps (H.264, CBR); what Kick accepts and lists in its player quality menu is decided by Kick.
+

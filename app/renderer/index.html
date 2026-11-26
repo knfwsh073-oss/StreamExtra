@@ -384,27 +384,6 @@ document.documentElement.dataset.theme=t;}catch(e){document.documentElement.data
           </section>
         </div>
 
-        <!-- ================= وجهة البث ================= -->
-        <div class="m-body" id="mDest">
-          <section class="sp-card">
-            <header><span class="sp-ic"><i data-ic="radio"></i></span><span class="sp-t"><b data-i="spConnT"></b><small data-i="spConnS"></small></span><span class="sp-pill" id="spConnPill"></span></header>
-            <div class="plats">
-              <button class="plat kick" id="kickBtn" type="button">KICK</button>
-              <button class="plat" disabled type="button">Twitch · <span data-i="soon"></span></button>
-              <button class="plat" disabled type="button">YouTube · <span data-i="soon"></span></button>
-            </div>
-            <div class="panel-k" id="kickPanel">
-              <div class="sp-f"><label data-i="streamUrl"></label>
-                <input type="text" id="kUrl" placeholder="rtmps://xxxx.global-contacts.live-video.net:443/app" spellcheck="false" dir="ltr">
-                <small class="sp-h" data-i="spUrlH"></small></div>
-              <div class="sp-f"><label data-i="streamKey"></label>
-                <div class="row"><input type="password" id="kKey" placeholder="sk_us-west-2_xxxxxxxx" spellcheck="false" dir="ltr"><button class="btn" id="eye" type="button"><i data-ic="eye"></i></button></div>
-                <small class="sp-h" data-i="spKeyH"></small></div>
-              <div class="hint" data-i="keyHint"></div>
-            </div>
-          </section>
-        </div>
-
         <!-- ================= جودة الفيديو ================= -->
         <div class="m-body" id="mVideo">
           <section class="sp-card">
@@ -492,6 +471,17 @@ document.documentElement.dataset.theme=t;}catch(e){document.documentElement.data
             <label class="kk-lbl" for="kChannelIn" data-i="kChannel"></label>
             <input type="text" id="kChannelIn" spellcheck="false" dir="ltr" placeholder="username">
             <div class="hint" data-i="kChannelHint"></div>
+          </div>
+
+          <div class="kk-card" id="kStreamCard">
+            <div class="kk-h"><span class="kk-ic"><i data-ic="radio"></i></span><div class="kk-ht"><b data-i="spConnT"></b><small data-i="spConnS"></small></div><span class="kk-pill" id="spConnPill"></span></div>
+            <div class="sp-f"><label class="kk-lbl" for="kUrl" data-i="streamUrl"></label>
+              <input type="text" id="kUrl" placeholder="rtmps://xxxx.global-contacts.live-video.net:443/app" spellcheck="false" dir="ltr">
+              <small class="sp-h" data-i="spUrlH"></small></div>
+            <div class="sp-f"><label class="kk-lbl" for="kKey" data-i="streamKey"></label>
+              <div class="row"><input type="password" id="kKey" placeholder="sk_us-west-2_xxxxxxxx" spellcheck="false" dir="ltr"><button class="btn" id="eye" type="button"><i data-ic="eye"></i></button></div>
+              <small class="sp-h" data-i="spKeyH"></small></div>
+            <div class="hint" data-i="keyHint"></div>
           </div>
 
           <div class="kk-card">
@@ -595,7 +585,6 @@ document.documentElement.dataset.theme=t;}catch(e){document.documentElement.data
         <div class="st-grp" data-i="grpGeneral"></div>
         <button class="on" data-mtab="general" type="button"><i data-ic="palette"></i><span data-i="general"></span></button>
         <div class="st-grp" data-i="grpStream"></div>
-        <button data-mtab="dest" type="button"><i data-ic="radio"></i><span data-i="stDest"></span></button>
         <button data-mtab="video" type="button"><i data-ic="monitor"></i><span data-i="stVideo"></span></button>
         <button data-mtab="encoder" type="button"><i data-ic="sliders"></i><span data-i="stEncoder"></span></button>
         <button data-mtab="audio" type="button"><i data-ic="music"></i><span data-i="audioTab"></span></button>
