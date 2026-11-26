@@ -42,8 +42,10 @@ Build_StreamExtra.cmd still builds a portable "StreamExtra" folder for testing. 
 
 Your settings and Kick link are stored in %AppData%\StreamExtra (+ a backup in %LocalAppData%\StreamExtra-Backup).
 
-v1.4 changes
+v1.2 changes
 ------------
+- Removed the default "Welcome" text: the app opens with an empty scene.
+- More reliable update check (several sources, newest version wins).
 - Undo / Redo: Ctrl+Z / Ctrl+Shift+Z (also Ctrl+Y). Works on any keyboard layout (Arabic too). Covers scene/source edits (add, delete, move, resize, properties).
 - Updates button/page now follow the app language from the first paint (Arabic shows Arabic).
 - Kick linking is one page: Settings -> Kick link now holds channel, stream URL + key, chat sign-in and developer app. The separate "Destination" page was removed.

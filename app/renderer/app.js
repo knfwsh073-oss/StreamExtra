@@ -300,7 +300,6 @@ function mkItem(type, o){ return Object.assign({ id:uid(), type, name:'', x:0, y
 function mkScene(name){ return { id:uid(), name, bg:['#0a0305', '#4a0814'], items:[] }; }
 function defaultScenes(){
   const sc = mkScene(t('welcomeScene'));
-  sc.items.push(mkItem('text', { name:t('welcomeText'), text:t('welcomeText'), x:140, y:210, w:1000, h:300, size:190, weight:800, glow:true }));
   return { scenes:[sc], current:sc.id };
 }
 function loadScenes(){

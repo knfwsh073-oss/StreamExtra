@@ -5,20 +5,16 @@
   "main": "main.js",
   "author": "Stream Extra",
   "license": "MIT",
-  "version": "1.1",
+  "version": "1.2",
   "releaseDate": "2026-11-26",
   "notes": {
     "ar": [
-      "تراجع وإعادة: Ctrl+Z للتراجع و Ctrl+Shift+Z للإعادة (يشتغل مع لوحة المفاتيح العربية أيضاً)",
-      "إصلاح: زر وصفحة التحديثات تظهر بالعربية عند اختيار العربية",
-      "ربط Kick كامل في صفحة واحدة",
-      "جودة 4K فعلية: القياس والترميز والإرسال بدقة 3840×2160 عند اختيارها"
+      "إزالة كلمة \"مرحبا\" من المشهد الافتراضي: يفتح البرنامج بمشهد فارغ",
+      "فحص التحديثات أقوى: يفحص عدة مصادر ويأخذ أحدث إصدار حتى لو كان أحدها قديماً"
     ],
     "en": [
-      "Undo / Redo: Ctrl+Z to undo and Ctrl+Shift+Z to redo (works on Arabic keyboard layout too)",
-      "Fix: the Updates button and page now show in Arabic when Arabic is selected",
-      "Kick linking is now fully in one page",
-      "True 4K quality: capture, encoding and output at 3840×2160 when selected"
+      "Removed the default \"Welcome\" text: the app now opens with an empty scene",
+      "More reliable update check: queries several sources and picks the newest version"
     ]
   }
 }
