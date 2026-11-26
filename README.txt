@@ -8,8 +8,8 @@ A) For users  (Setup file)
 3) Pick the folder to install into -> Download
    It downloads the engine + the app files from GitHub, then opens the app.
 4) From now on, this same exe just opens the app (also a Desktop / Start-menu shortcut is created).
-5) When a new version is published, the app shows an "Update" page. Click Update:
-   the app closes by itself, the files in your install folder are updated, and the app re-opens.
+5) When a new version is published, the app shows an "Update" page (Settings -> Updates). Click Update now:
+   the new files download into the folder you chose (progress is shown inside the app), the app closes by itself and re-opens. Nothing else.
 
 B) For you (the developer) - ONE file does everything
 -----------------------------------------------------

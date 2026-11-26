@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -40,7 +42,7 @@ static class Cfg
         }
         catch { return null; }
     }
-    static string Esc(string s) { return (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\""); }
+    public static string Esc(string s) { return (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\""); }
     public static void Write(string dir, string lang, string theme)
     {
         Directory.CreateDirectory(DataDir);
@@ -54,6 +56,7 @@ static class Strings
     static Dictionary<string, string[]> T = new Dictionary<string, string[]>();   // key -> { ar, en }
     static Strings()
     {
+        Add("sub", "استوديو البث المباشر المجاني", "Free live streaming studio");
         Add("title", "Stream Extra - التثبيت", "Stream Extra - Setup");
         Add("p1h", "أهلاً بك في Stream Extra", "Welcome to Stream Extra");
         Add("lang", "اللغة", "Language");
@@ -342,15 +345,18 @@ class Installer
         Report("s_done", 1.0);
     }
 
-    // ---------- update only the app code ----------
-    public void Update()
+    // ---------- update only the app code (silent: no window) ----------
+    public void PrepareUpdate()
     {
         tmp = Path.Combine(Dir, "_download");
         Directory.CreateDirectory(tmp);
-        InstallAppFiles(0.05, 0.95);
+        PrepareApp(0.02, 0.95);
+    }
+    public void FinishUpdate()
+    {
+        SwapApp();
         Cfg.Write(Dir, Lang, Theme);
         try { Directory.Delete(tmp, true); } catch { }
-        Report("s_done", 1.0);
     }
 
     // Reads the app copy that publish.ps1 embedded inside this exe (used when GitHub is unreachable on first install)
@@ -418,7 +424,9 @@ class Installer
 
     public bool AllowEmbedded = false;     // true only for the first install (an update must never go back to an older embedded copy)
 
-    void InstallAppFiles(double a, double b)
+    void InstallAppFiles(double a, double b) { PrepareApp(a, b); SwapApp(); }
+
+    void PrepareApp(double a, double b)
     {
         Report("s_app", a);
         string res = Path.Combine(Dir, "resources");
@@ -466,6 +474,15 @@ class Installer
         }
         if (!got) throw new Exception(Strings.Get("noinet", Lang));
 
+    }
+
+    void SwapApp()
+    {
+        string res = Path.Combine(Dir, "resources");
+        string appNew = Path.Combine(res, "app_new");
+        string appDir = Path.Combine(res, "app");
+        string appOld = Path.Combine(res, "app_old");
+        if (!Directory.Exists(appNew)) throw new Exception(Strings.Get("badzip", Lang));
         // keep the user's local Kick app keys (kick-app.json) if they exist
         string oldKick = Path.Combine(appDir, "kick-app.json");
         if (File.Exists(oldKick)) { try { File.Copy(oldKick, Path.Combine(appNew, "kick-app.json"), true); } catch { } }
@@ -498,51 +515,176 @@ class Installer
     }
 }
 
+// ======================= UI (same look as the app: dark/light, crimson accent) =======================
+class Pal
+{
+    public bool Light;
+    static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
+    public Color Bg    { get { return Light ? C(236, 236, 240) : C(9, 9, 11); } }
+    public Color Head  { get { return Light ? C(246, 246, 248) : C(24, 24, 27); } }
+    public Color Panel { get { return Light ? C(255, 255, 255) : C(18, 18, 20); } }
+    public Color Panel3 { get { return Light ? C(238, 238, 242) : C(33, 33, 38); } }
+    public Color Line  { get { return Light ? C(222, 222, 229) : C(42, 42, 48); } }
+    public Color Line2 { get { return Light ? C(203, 203, 212) : C(56, 56, 64); } }
+    public Color Txt   { get { return Light ? C(20, 20, 24) : C(244, 244, 245); } }
+    public Color Mut   { get { return Light ? C(93, 93, 105) : C(157, 157, 168); } }
+    public Color Ac    { get { return C(161, 20, 44); } }
+    public Color AcH   { get { return Light ? C(184, 26, 54) : C(187, 28, 56); } }
+    public Color AcD   { get { return C(98, 9, 26); } }
+    public Color Err   { get { return Light ? C(168, 20, 44) : C(255, 107, 128); } }
+}
+
+static class Gfx
+{
+    public static GraphicsPath Round(Rectangle r, int rad)
+    {
+        GraphicsPath p = new GraphicsPath();
+        int d = rad * 2;
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
+    }
+}
+
+class RBtn : Control
+{
+    public Pal P;
+    public bool Primary, OnHead;
+    bool hover, down;
+    public RBtn(Pal p)
+    {
+        P = p;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+        Cursor = Cursors.Hand;
+        Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+    }
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e) { down = true; Invalidate(); base.OnMouseDown(e); }
+    protected override void OnMouseUp(MouseEventArgs e) { down = false; Invalidate(); base.OnMouseUp(e); }
+    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        Color back = OnHead ? P.Head : (Parent != null ? Parent.BackColor : P.Bg);
+        g.Clear(back);
+        Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+        using (GraphicsPath gp = Gfx.Round(r, 10))
+        {
+            if (Primary)
+            {
+                Color c1 = hover ? P.AcH : P.Ac, c2 = down ? P.AcD : (hover ? P.Ac : P.AcD);
+                using (LinearGradientBrush lg = new LinearGradientBrush(r, c1, c2, 90f)) g.FillPath(lg, gp);
+            }
+            else
+            {
+                using (SolidBrush b = new SolidBrush(hover ? P.Panel3 : P.Panel)) g.FillPath(b, gp);
+                using (Pen pen = new Pen(hover ? P.Line2 : P.Line, 1f)) g.DrawPath(pen, gp);
+            }
+        }
+        Color fg = Primary ? Color.White : P.Txt;
+        if (!Enabled) fg = Color.FromArgb(120, fg);
+        TextFormatFlags f = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
+        if (RightToLeft == RightToLeft.Yes) f |= TextFormatFlags.RightToLeft;
+        TextRenderer.DrawText(g, Text, Font, r, fg, f);
+    }
+}
+
+class RBar : Control
+{
+    public Pal P;
+    int val;
+    public RBar(Pal p) { P = p; SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); }
+    public int Value { get { return val; } set { val = Math.Max(0, Math.Min(1000, value)); Invalidate(); } }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Parent != null ? Parent.BackColor : P.Bg);
+        Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+        int rad = Height / 2;
+        using (GraphicsPath gp = Gfx.Round(r, rad)) using (SolidBrush b = new SolidBrush(P.Panel3)) g.FillPath(b, gp);
+        int w = (int)((Width - 1) * (val / 1000.0));
+        if (w < Height) w = val > 0 ? Height : 0;
+        if (w > 0)
+        {
+            Rectangle fr = new Rectangle(0, 0, w, Height - 1);
+            bool rtl = RightToLeft == RightToLeft.Yes;
+            if (rtl) fr = new Rectangle(Width - 1 - w, 0, w, Height - 1);
+            using (GraphicsPath gp = Gfx.Round(fr, rad)) using (LinearGradientBrush lg = new LinearGradientBrush(fr, P.AcH, P.AcD, 0f)) g.FillPath(lg, gp);
+        }
+    }
+}
+
 class MainForm : Form
 {
+    [DllImport("user32.dll")] static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, int w, int l);
+
+    const int W = 600, H = 440, HEAD = 84;
     string lang, theme, dir;
-    bool updateMode; int waitPid;
+    Pal pal = new Pal();
+    Image logo;
     Panel p1, p2, p3;
-    Label title, sub;
-    Label l1h, lLang, lTheme, l2h, l2s, l3h, status, errLbl;
-    RadioButton rAr, rEn, rLight, rDark;
+    Label l1h, lLang, lTheme, l2h, l2s, l3h, status, pctLbl, errLbl;
+    RBtn rAr, rEn, rLight, rDark, bNext, bBrowse, bInstall, bBack, bRetry, bClose, bX;
     TextBox tbDir;
-    Button bNext, bBrowse, bInstall, bBack, bRetry, bClose;
-    ProgressBar bar;
+    RBar bar;
     Thread worker;
     bool finished;
+    Dictionary<Control, int[]> place = new Dictionary<Control, int[]>();   // control -> { x, w } (LTR position inside its panel)
 
-    public MainForm(string initLang, string initTheme, string installDir, bool update, int pid)
+    public MainForm(string initLang, string initTheme, string installDir)
     {
         lang = initLang == "en" ? "en" : "ar";
         theme = initTheme == "light" ? "light" : "dark";
         dir = installDir;
-        updateMode = update; waitPid = pid;
+        pal.Light = theme == "light";
 
-        Font = new Font("Segoe UI", 10f);
-        ClientSize = new Size(560, 380);
+        FormBorderStyle = FormBorderStyle.None;
+        ClientSize = new Size(W, H);
         StartPosition = FormStartPosition.CenterScreen;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
+        Font = new Font("Segoe UI", 10f);
+        DoubleBuffered = true;
         try { Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location); } catch { }
+        try
+        {
+            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("logo.png"))
+            {
+                if (s != null) { MemoryStream ms = new MemoryStream(); s.CopyTo(ms); ms.Position = 0; logo = Image.FromStream(ms); }
+            }
+        }
+        catch { }
 
-        // page 1
-        p1 = NewPanel(); l1h = Head(p1); lLang = Lbl(p1, 36, 90); lTheme = Lbl(p1, 36, 190);
-        rAr = Choice(p1, 36, 120); rEn = Choice(p1, 200, 120);
-        rLight = Choice(p1, 36, 220); rDark = Choice(p1, 200, 220);
-        bNext = Btn(p1, 36, 310, 488);
-        rAr.CheckedChanged += delegate { if (rAr.Checked) { lang = "ar"; Apply(); } };
-        rEn.CheckedChanged += delegate { if (rEn.Checked) { lang = "en"; Apply(); } };
-        rLight.CheckedChanged += delegate { if (rLight.Checked) { theme = "light"; Apply(); } };
-        rDark.CheckedChanged += delegate { if (rDark.Checked) { theme = "dark"; Apply(); } };
+        // close button (top corner)
+        bX = new RBtn(pal); bX.Text = "✕"; bX.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+        bX.SetBounds(0, 26, 32, 32); bX.OnHead = true;
+        bX.Click += delegate { Environment.Exit(1); };
+        Controls.Add(bX);
+
+        // page 1: language + theme
+        p1 = NewPanel(); l1h = Head(p1);
+        lLang = Lbl(p1, 36, 58, 526, 24); lTheme = Lbl(p1, 36, 150, 526, 24);
+        rAr = Chip(p1, 36, 86); rEn = Chip(p1, 206, 86);
+        rLight = Chip(p1, 36, 178); rDark = Chip(p1, 206, 178);
+        bNext = Btn(p1, 36, 276, 526, 46, true);
+        rAr.Click += delegate { lang = "ar"; Apply(); };
+        rEn.Click += delegate { lang = "en"; Apply(); };
+        rLight.Click += delegate { theme = "light"; Apply(); };
+        rDark.Click += delegate { theme = "dark"; Apply(); };
         bNext.Click += delegate { ShowPage(p2); };
 
-        // page 2
-        p2 = NewPanel(); l2h = Head(p2); l2s = Lbl(p2, 36, 84); l2s.Size = new Size(488, 50);
-        tbDir = new TextBox(); tbDir.Location = new Point(36, 150); tbDir.Size = new Size(380, 28); tbDir.Text = dir; p2.Controls.Add(tbDir);
-        bBrowse = Btn(p2, 424, 148, 100); bBrowse.Height = 32;
-        bBack = Btn(p2, 36, 310, 140);
-        bInstall = Btn(p2, 184, 310, 340);
+        // page 2: folder
+        p2 = NewPanel(); l2h = Head(p2); l2s = Lbl(p2, 36, 58, 526, 48);
+        tbDir = new TextBox(); tbDir.Font = new Font("Segoe UI", 10.5f); tbDir.BorderStyle = BorderStyle.FixedSingle; tbDir.Text = dir;
+        tbDir.SetBounds(36, 122, 408, 30); p2.Controls.Add(tbDir); place[tbDir] = new int[] { 36, 408 };
+        bBrowse = Btn(p2, 454, 118, 108, 36, false);
+        bBack = Btn(p2, 36, 276, 150, 46, false);
+        bInstall = Btn(p2, 196, 276, 366, 46, true);
         bBrowse.Click += delegate
         {
             using (FolderBrowserDialog fb = new FolderBrowserDialog())
@@ -555,85 +697,109 @@ class MainForm : Form
         bBack.Click += delegate { ShowPage(p1); };
         bInstall.Click += delegate { StartWork(); };
 
-        // page 3
+        // page 3: progress
         p3 = NewPanel(); l3h = Head(p3);
-        status = Lbl(p3, 36, 110); status.Size = new Size(488, 50);
-        bar = new ProgressBar(); bar.Location = new Point(36, 170); bar.Size = new Size(488, 22); bar.Minimum = 0; bar.Maximum = 1000; bar.Style = ProgressBarStyle.Continuous; p3.Controls.Add(bar);
-        errLbl = Lbl(p3, 36, 205); errLbl.Size = new Size(488, 90); errLbl.ForeColor = Color.FromArgb(230, 70, 70);
-        bRetry = Btn(p3, 36, 310, 240); bClose = Btn(p3, 284, 310, 240);
+        status = Lbl(p3, 36, 78, 526, 28);
+        bar = new RBar(pal); bar.SetBounds(36, 116, 526, 12); p3.Controls.Add(bar); place[bar] = new int[] { 36, 526 };
+        pctLbl = Lbl(p3, 36, 136, 526, 24);
+        errLbl = Lbl(p3, 36, 176, 526, 90);
+        bRetry = Btn(p3, 36, 276, 256, 46, true); bClose = Btn(p3, 306, 276, 256, 46, false);
         bRetry.Visible = false; bClose.Visible = false;
         bRetry.Click += delegate { bRetry.Visible = false; bClose.Visible = false; errLbl.Text = ""; StartWork(); };
         bClose.Click += delegate { Environment.Exit(1); };
 
         Controls.Add(p1); Controls.Add(p2); Controls.Add(p3);
-        rAr.Checked = lang == "ar"; rEn.Checked = lang == "en";
-        rLight.Checked = theme == "light"; rDark.Checked = theme == "dark";
         Apply();
         FormClosing += delegate(object s, FormClosingEventArgs e) { if (worker != null && worker.IsAlive && !finished) Environment.Exit(1); };
-        Shown += delegate { if (updateMode) StartWork(); };
-        ShowPage(updateMode ? p3 : p1);
+        MouseDown += delegate(object s, MouseEventArgs e) { if (e.Button == MouseButtons.Left && e.Y < HEAD) { ReleaseCapture(); SendMessage(Handle, 0xA1, 2, 0); } };
+        ShowPage(p1);
     }
 
-    Panel NewPanel() { Panel p = new Panel(); p.Dock = DockStyle.Fill; p.Visible = false; return p; }
-    Label Head(Panel p) { Label l = new Label(); l.AutoSize = false; l.Location = new Point(36, 28); l.Size = new Size(488, 40); l.Font = new Font("Segoe UI", 16f, FontStyle.Bold); p.Controls.Add(l); return l; }
-    Label Lbl(Panel p, int x, int y) { Label l = new Label(); l.AutoSize = false; l.Location = new Point(x, y); l.Size = new Size(488, 26); p.Controls.Add(l); return l; }
-    RadioButton Choice(Panel p, int x, int y)
+    Panel NewPanel() { Panel p = new Panel(); p.SetBounds(1, HEAD + 1, W - 2, H - HEAD - 2); p.Visible = false; return p; }
+    Label Head(Panel p)
     {
-        RadioButton r = new RadioButton(); r.Appearance = Appearance.Button; r.FlatStyle = FlatStyle.Flat;
-        r.Location = new Point(x, y); r.Size = new Size(150, 44); r.TextAlign = ContentAlignment.MiddleCenter; r.Cursor = Cursors.Hand;
-        r.FlatAppearance.BorderSize = 1; r.CheckedChanged += delegate { StyleChoice(r); };
-        p.Controls.Add(r); return r;
+        Label l = new Label(); l.AutoSize = false; l.SetBounds(36, 8, 526, 40);
+        l.Font = new Font("Segoe UI", 17f, FontStyle.Bold); p.Controls.Add(l); place[l] = new int[] { 36, 526 }; return l;
     }
-    Button Btn(Panel p, int x, int y, int w)
+    Label Lbl(Panel p, int x, int y, int w, int h)
     {
-        Button b = new Button(); b.Location = new Point(x, y); b.Size = new Size(w, 44); b.FlatStyle = FlatStyle.Flat; b.Cursor = Cursors.Hand;
-        b.FlatAppearance.BorderSize = 0; b.Font = new Font("Segoe UI", 11f, FontStyle.Bold); p.Controls.Add(b); return b;
+        Label l = new Label(); l.AutoSize = false; l.SetBounds(x, y, w, h); p.Controls.Add(l); place[l] = new int[] { x, w }; return l;
     }
-
-    Color Bg { get { return theme == "light" ? Color.FromArgb(244, 244, 246) : Color.FromArgb(18, 18, 20); } }
-    Color Fg { get { return theme == "light" ? Color.FromArgb(24, 24, 27) : Color.FromArgb(242, 242, 244); } }
-    Color Panel2 { get { return theme == "light" ? Color.FromArgb(255, 255, 255) : Color.FromArgb(30, 30, 34); } }
-    Color Accent { get { return Color.FromArgb(161, 20, 44); } }
-
-    void StyleChoice(RadioButton r)
+    RBtn Chip(Panel p, int x, int y)
     {
-        r.BackColor = r.Checked ? Accent : Panel2;
-        r.ForeColor = r.Checked ? Color.White : Fg;
-        r.FlatAppearance.BorderColor = r.Checked ? Accent : (theme == "light" ? Color.FromArgb(210, 210, 216) : Color.FromArgb(60, 60, 66));
+        RBtn b = new RBtn(pal); b.SetBounds(x, y, 160, 46); b.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+        p.Controls.Add(b); place[b] = new int[] { x, 160 }; return b;
+    }
+    RBtn Btn(Panel p, int x, int y, int w, int h, bool primary)
+    {
+        RBtn b = new RBtn(pal); b.SetBounds(x, y, w, h); b.Primary = primary; p.Controls.Add(b); place[b] = new int[] { x, w }; return b;
     }
 
     void Apply()
     {
         bool rtl = lang == "ar";
-        RightToLeft = rtl ? RightToLeft.Yes : RightToLeft.No;
-        RightToLeftLayout = rtl;
-        BackColor = Bg; ForeColor = Fg;
-        foreach (Panel p in new Panel[] { p1, p2, p3 }) { p.BackColor = Bg; p.ForeColor = Fg; p.RightToLeft = RightToLeft; }
+        pal.Light = theme == "light";
+        RightToLeft rt = rtl ? RightToLeft.Yes : RightToLeft.No;
+        BackColor = pal.Bg; ForeColor = pal.Txt;
+        foreach (Panel p in new Panel[] { p1, p2, p3 }) { p.BackColor = pal.Bg; p.ForeColor = pal.Txt; p.RightToLeft = rt; }
+        // mirror the layout for Arabic
+        int pw = W - 2;
+        foreach (KeyValuePair<Control, int[]> kv in place) kv.Key.Left = rtl ? pw - kv.Value[0] - kv.Value[1] : kv.Value[0];
+        bX.Left = rtl ? 18 : W - 18 - bX.Width;
+        bX.RightToLeft = rt;
+        foreach (RBtn b in new RBtn[] { rAr, rEn, rLight, rDark, bNext, bBrowse, bInstall, bBack, bRetry, bClose, bX }) b.RightToLeft = rt;
+
         Text = Strings.Get("title", lang);
         l1h.Text = Strings.Get("p1h", lang); lLang.Text = Strings.Get("lang", lang); lTheme.Text = Strings.Get("theme", lang);
         rAr.Text = Strings.Get("ar", lang); rEn.Text = Strings.Get("en", lang); rLight.Text = Strings.Get("light", lang); rDark.Text = Strings.Get("dark", lang);
+        rAr.Primary = lang == "ar"; rEn.Primary = lang == "en"; rLight.Primary = theme == "light"; rDark.Primary = theme == "dark";
         bNext.Text = Strings.Get("next", lang);
         l2h.Text = Strings.Get("p2h", lang); l2s.Text = Strings.Get("p2s", lang);
         bBrowse.Text = Strings.Get("browse", lang); bBack.Text = Strings.Get("back", lang); bInstall.Text = Strings.Get("install", lang);
-        l3h.Text = Strings.Get(updateMode ? "u3h" : "p3h", lang);
+        l3h.Text = Strings.Get("p3h", lang);
         bRetry.Text = Strings.Get("retry", lang); bClose.Text = Strings.Get("close", lang);
-        foreach (Button b in new Button[] { bNext, bInstall }) { b.BackColor = Accent; b.ForeColor = Color.White; }
-        foreach (Button b in new Button[] { bBack, bBrowse, bClose, bRetry }) { b.BackColor = Panel2; b.ForeColor = Fg; }
-        tbDir.BackColor = Panel2; tbDir.ForeColor = Fg; tbDir.BorderStyle = BorderStyle.FixedSingle;
-        tbDir.TextAlign = HorizontalAlignment.Left; tbDir.RightToLeft = RightToLeft.No;
-        l1h.ForeColor = Fg; l2h.ForeColor = Fg; l3h.ForeColor = Fg;
-        foreach (RadioButton r in new RadioButton[] { rAr, rEn, rLight, rDark }) StyleChoice(r);
+
+        foreach (Label l in new Label[] { l1h, l2h, l3h }) l.ForeColor = pal.Txt;
+        foreach (Label l in new Label[] { lLang, lTheme, l2s, pctLbl }) l.ForeColor = pal.Mut;
+        status.ForeColor = pal.Txt; status.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+        errLbl.ForeColor = pal.Err;
+        tbDir.BackColor = pal.Panel; tbDir.ForeColor = pal.Txt; tbDir.TextAlign = HorizontalAlignment.Left; tbDir.RightToLeft = RightToLeft.No;
+        bar.RightToLeft = rt;
+        foreach (Control c in Controls) c.Invalidate();
+        foreach (Panel p in new Panel[] { p1, p2, p3 }) foreach (Control c in p.Controls) c.Invalidate();
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.Clear(pal.Bg);
+        using (SolidBrush b = new SolidBrush(pal.Head)) g.FillRectangle(b, 0, 0, W, HEAD);
+        using (LinearGradientBrush lg = new LinearGradientBrush(new Rectangle(0, 0, W, 4), pal.AcD, pal.AcH, 0f)) g.FillRectangle(lg, 0, 0, W, 4);
+        using (Pen pen = new Pen(pal.Line)) g.DrawLine(pen, 0, HEAD, W, HEAD);
+        bool rtl = lang == "ar";
+        int lx = rtl ? W - 28 - 44 : 28;
+        if (logo != null) g.DrawImage(logo, new Rectangle(lx, 24, 44, 44));
+        else using (SolidBrush b = new SolidBrush(pal.Ac)) g.FillEllipse(b, lx, 24, 44, 44);
+        int tw = 300, tx = rtl ? lx - 14 - tw : lx + 44 + 14;
+        TextFormatFlags f = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | (rtl ? (TextFormatFlags.Right | TextFormatFlags.RightToLeft) : TextFormatFlags.Left);
+        using (Font f1 = new Font("Segoe UI", 15f, FontStyle.Bold)) TextRenderer.DrawText(g, "Stream Extra", f1, new Rectangle(tx, 27, tw, 28), pal.Txt, f);
+        using (Font f2 = new Font("Segoe UI", 9f)) TextRenderer.DrawText(g, Strings.Get("sub", lang), f2, new Rectangle(tx, 53, tw, 18), pal.Mut, f);
+        using (Pen pen = new Pen(pal.Line2)) g.DrawRectangle(pen, 0, 0, W - 1, H - 1);
     }
 
     void ShowPage(Panel p) { p1.Visible = p == p1; p2.Visible = p == p2; p3.Visible = p == p3; }
 
-    void SetStatus(string keyOrText, double frac)
+    void SetStatus(string key, double frac)
     {
         BeginInvoke(new MethodInvoker(delegate
         {
-            string s = Strings.Get(keyOrText, lang);
-            status.Text = s;
-            int v = (int)(frac * 1000); if (v < 0) v = 0; if (v > 1000) v = 1000; bar.Value = v;
+            status.Text = Strings.Get(key, lang);
+            int v = (int)(frac * 1000); if (v < 0) v = 0; if (v > 1000) v = 1000;
+            bar.Value = v;
+            pctLbl.Text = (v / 10) + "%";
         }));
     }
 
@@ -649,47 +815,34 @@ class MainForm : Form
     void StartWork()
     {
         string chosen = tbDir.Text.Trim();
-        if (!updateMode)
+        if (chosen.Length == 0) return;
+        try
         {
-            if (chosen.Length == 0) return;
-            try
-            {
-                chosen = Path.GetFullPath(chosen);
-                // if the folder already has other files (and is not a previous install), install into a "StreamExtra" subfolder
-                if (Directory.Exists(chosen) && Directory.GetFileSystemEntries(chosen).Length > 0 && !File.Exists(Path.Combine(chosen, Cfg.AppExe)))
-                    chosen = Path.Combine(chosen, "StreamExtra");
-            }
-            catch { MessageBox.Show(this, "Invalid folder", Text); return; }
-            dir = chosen;
+            chosen = Path.GetFullPath(chosen);
+            // if the folder already has other files (and is not a previous install), install into a "StreamExtra" subfolder
+            if (Directory.Exists(chosen) && Directory.GetFileSystemEntries(chosen).Length > 0 && !File.Exists(Path.Combine(chosen, Cfg.AppExe)))
+                chosen = Path.Combine(chosen, "StreamExtra");
         }
+        catch { MessageBox.Show(this, "Invalid folder", Text); return; }
+        dir = chosen;
         ShowPage(p3);
-        bar.Value = 0; status.Text = "";
+        bar.Value = 0; status.Text = ""; pctLbl.Text = "";
         worker = new Thread(delegate()
         {
             try
             {
                 Installer ins = new Installer();
-                ins.AllowEmbedded = !updateMode;
+                ins.AllowEmbedded = true;
                 ins.Dir = dir; ins.Lang = lang; ins.Theme = theme;
                 ins.Log = delegate(string s) { };
                 ins.Report = delegate(string k, double f) { SetStatus(k, f); };
-                if (updateMode)
-                {
-                    SetStatus("s_wait", 0.0);
-                    Launcher.WaitForAppExit(waitPid, dir);
-                    ins.Update();
-                }
-                else ins.Install();
+                ins.Install();
                 finished = true;
                 Thread.Sleep(600);
                 Launcher.StartApp(dir);
                 Environment.Exit(0);
             }
-            catch (Exception ex)
-            {
-                if (updateMode) { try { Launcher.StartApp(dir); } catch { } }   // never leave the user without the app
-                Fail(ex.Message);
-            }
+            catch (Exception ex) { Fail(ex.Message); }
         });
         worker.IsBackground = true;
         worker.Start();
@@ -732,13 +885,50 @@ static class Launcher
         Thread.Sleep(500);
     }
 
+    // progress file read by the app (main.js) so the app itself shows the download progress
+    static void WriteProg(string state, double pct, string msg)
+    {
+        try
+        {
+            Directory.CreateDirectory(Cfg.DataDir);
+            string j = "{\"state\":\"" + state + "\",\"pct\":" + pct.ToString("0.000", CultureInfo.InvariantCulture) + ",\"msg\":\"" + Cfg.Esc(msg ?? "") + "\"}";
+            System.IO.File.WriteAllText(Path.Combine(Cfg.DataDir, "update-progress.json"), j, new UTF8Encoding(false));
+        }
+        catch { }
+    }
+
+    // --update (started by the app): NO window. 1) download + unpack into app_new while the app is still open
+    // 2) tell the app "ready" (it closes itself) 3) swap the folders 4) re-open the app. Files go to the folder the user chose.
+    static void RunSilentUpdate(string dir, string lang, string theme, int pid)
+    {
+        bool exited = false;
+        try
+        {
+            WriteProg("downloading", 0, "");
+            Installer ins = new Installer();
+            ins.Dir = dir; ins.Lang = lang; ins.Theme = theme;
+            ins.Log = delegate(string s) { };
+            ins.Report = delegate(string k, double f) { WriteProg("downloading", f, k); };
+            ins.PrepareUpdate();
+            WriteProg("ready", 1, "");
+            WaitForAppExit(pid, dir);
+            exited = true;
+            ins.FinishUpdate();
+            StartApp(dir);
+            WriteProg("done", 1, "");
+        }
+        catch (Exception ex)
+        {
+            WriteProg("error", 0, ex.Message);
+            if (exited) { try { StartApp(dir); } catch { } }     // never leave the user without the app
+        }
+    }
+
     [STAThread]
     static void Main(string[] args)
     {
         try { SetProcessDPIAware(); } catch { }
         Net.Init();
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
 
         bool update = false; int pid = 0;
         for (int i = 0; i < args.Length; i++)
@@ -752,18 +942,16 @@ static class Launcher
         string theme = Cfg.Read("theme") ?? "dark";
         bool installed = !string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, Cfg.AppExe));
 
-        if (update && installed)
-        {
-            Application.Run(new MainForm(lang, theme, dir, true, pid));
-            return;
-        }
+        if (update && installed) { RunSilentUpdate(dir, lang, theme, pid); return; }
         if (installed)
         {
             // this file "became" the app: just open it
             try { StartApp(dir); } catch (Exception ex) { MessageBox.Show(ex.Message, "Stream Extra"); }
             return;
         }
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
         string def = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "StreamExtra");
-        Application.Run(new MainForm(lang, theme, def, false, 0));
+        Application.Run(new MainForm(lang, theme, def));
     }
 }

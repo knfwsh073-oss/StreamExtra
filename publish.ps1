@@ -65,7 +65,7 @@ try {
   }
   $za.Dispose(); $zfs.Dispose()
 
-  & $csc /nologo /target:winexe /optimize+ /codepage:65001 "/out:$setupExe" "/win32icon:app\assets\icon.ico" "/resource:$embZip,app.zip" `
+  & $csc /nologo /target:winexe /optimize+ /codepage:65001 "/out:$setupExe" "/win32icon:app\assets\icon.ico" "/resource:$embZip,app.zip" "/resource:app\assets\logo.png,logo.png" `
     /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll setup\Setup.cs
   Remove-Item $embZip -Force -ErrorAction SilentlyContinue
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path $setupExe)) { throw 'Setup build failed.' }

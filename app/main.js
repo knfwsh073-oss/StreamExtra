@@ -1726,12 +1726,32 @@ async function checkUpdate() {
   return out;
 }
 ipcMain.handle('update:check', () => checkUpdate());
+// التحديث الصامت: المشغّل (StreamExtra.exe --update) بلا نافذة؛ يحمّل الملفات الجديدة إلى مجلد التثبيت الذي اخترته ويكتب التقدّم في ملف،
+// وبرنامجنا يعرض التقدّم، وعند "ready" يقفل نفسه، فيبدّل المشغّل الملفات ويفتح البرنامج من جديد.
+const UPD_PROG = path.join(dataDir, 'update-progress.json');
+let updPoll = null;
+function sendUpd(p) { try { if (win && !win.isDestroyed()) win.webContents.send('update:progress', p); } catch (e) {} }
 ipcMain.handle('update:run', () => {
   if (!isSetupInstall()) return { ok: false, error: 'not-installed-by-setup' };
+  if (updPoll) return { ok: true, already: true };
   try {
-    const child = spawn(launcherPath, ['--update', '--pid', String(process.pid)], { detached: true, stdio: 'ignore', cwd: installDirPath });
+    try { fs.unlinkSync(UPD_PROG); } catch (e) {}
+    const child = spawn(launcherPath, ['--update', '--pid', String(process.pid)], { detached: true, stdio: 'ignore', cwd: installDirPath, windowsHide: true });
+    child.on('error', () => { sendUpd({ state: 'error', msg: 'launcher' }); clearInterval(updPoll); updPoll = null; });
     child.unref();
-    setTimeout(() => app.quit(), 150);
+    const t0 = Date.now(); let lastPct = 0;
+    updPoll = setInterval(() => {
+      let j = null;
+      try { j = JSON.parse(fs.readFileSync(UPD_PROG, 'utf8').replace(/^\uFEFF/, '')); } catch (e) {}
+      if (!j) {
+        if (Date.now() - t0 > 20000) { clearInterval(updPoll); updPoll = null; sendUpd({ state: 'error', msg: 'launcher' }); }
+        return;
+      }
+      lastPct = Math.max(lastPct, Number(j.pct) || 0);
+      sendUpd({ state: j.state, pct: lastPct, msg: j.msg || '' });
+      if (j.state === 'ready') { clearInterval(updPoll); updPoll = null; setTimeout(() => app.quit(), 900); }
+      else if (j.state === 'error') { clearInterval(updPoll); updPoll = null; }
+    }, 350);
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 });
